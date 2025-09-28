@@ -1,0 +1,116 @@
+name: Central Caravel User Project Makefile Sync
+
+on:
+  # 1. Automated Trigger: Triggered by a dispatch from caravel_user_project
+  repository_dispatch:
+    types: [caravel-user-project-push]
+  # 2. Manual Trigger: Allows manual execution from the Actions tab
+  workflow_dispatch:
+    inputs:
+      upstream_sha:
+        description: 'Optional: Upstream commit SHA to use for the PR title'
+        required: false
+        default: 'latest'
+
+jobs:
+  sync_downstream_repos:
+    runs-on: ubuntu-latest
+    
+    # 1. Define the list of repositories to update
+    strategy:
+      matrix:
+        # REPLACE the list below with the full names of your target repos (e.g., chipfoundry/user-project-1)
+        target_repo_full_name: 
+          - chipfoundry/openframe_user_project
+          - chipfoundry/caravel_user_project_analog
+          - chipfoundry/caravel_user_sram
+    
+    steps:
+      # --- Setup & Authentication ---
+      
+      - name: Generate App Token
+        id: app_token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.GH_APP_ID }}
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+          owner: chipfoundry 
+
+      - name: Set Up Git
+        run: |
+          git config --global user.name "Caravel-Sync-Bot"
+          git config --global user.email "Caravel-Sync-Bot[${{ secrets.GH_APP_ID }}]@users.noreply.github.com"
+          
+      # 2. Checkout TARGET Downstream Repository (where changes will be applied)
+      - name: Checkout Target Repo ${{ matrix.target_repo_full_name }}
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ matrix.target_repo_full_name }}
+          token: ${{ steps.app_token.outputs.token }}
+          path: target-repo
+          fetch-depth: 0 
+
+      # 3. Clone Upstream Repo to a temporary directory
+      - name: Clone Upstream Caravel Repo
+        uses: actions/checkout@v4
+        with:
+          repository: chipfoundry/caravel_user_project
+          token: ${{ steps.app_token.outputs.token }}
+          path: upstream-repo
+          
+      # --- Copy & Check ---
+      
+      - name: Copy Specific Files and Check for Changes
+        id: copy_files
+        run: |
+          TARGET_DIR="target-repo"
+          UPSTREAM_DIR="upstream-repo"
+          
+          # Change directory to the downstream repo clone to run git commands
+          cd $TARGET_DIR
+          
+          # Define branch name and SHA for tracking
+          UPSTREAM_SHA=${{ github.event.client_payload.sha || github.event.inputs.upstream_sha }}
+          BRANCH_NAME="sync/makefiles-update-${UPSTREAM_SHA}-${GITHUB_RUN_ID}"
+          git checkout -b $BRANCH_NAME
+          
+          # --- Copy Files ---
+          cp $UPSTREAM_DIR/Makefile .
+          mkdir -p openlane 2>/dev/null || true # Ensure the directory exists
+          cp $UPSTREAM_DIR/openlane/Makefile openlane/
+          
+          # Add the specific files to staging
+          git add Makefile openlane/Makefile
+          
+          # Check for a diff (i.e., if the files actually changed)
+          if git diff --cached --exit-code; then
+            # No changes found
+            echo "sync_required=false" >> $GITHUB_OUTPUT
+            echo "Skipping PR creation: No Makefile changes detected."
+          else
+            # Changes found, proceeding with PR
+            echo "sync_required=true" >> $GITHUB_OUTPUT
+          fi
+          
+          echo "BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_OUTPUT
+          echo "UPSTREAM_SHA=$UPSTREAM_SHA" >> $GITHUB_OUTPUT
+
+      # --- Pull Request Creation ---
+
+      - name: Create Pull Request
+        if: steps.copy_files.outputs.sync_required == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ steps.app_token.outputs.token }}
+          path: target-repo 
+          commit-message: "Autosync: Update root and openlane Makefiles (${{ steps.copy_files.outputs.UPSTREAM_SHA }})"
+          title: "🤖 [Automated Sync] Update Core Makefiles"
+          body: |
+            This is an automated Pull Request to sync the latest **Makefile** and **openlane/Makefile** from the `caravel_user_project` template. This is a file-specific update to standardize configuration.
+            
+            * Upstream Commit: `${{ steps.copy_files.outputs.UPSTREAM_SHA }}`
+          branch: ${{ steps.copy_files.outputs.BRANCH_NAME }}
+          base: main 
+          labels: automation, config-sync
+          # Target the repository where the PR should be created
+          repository: ${{ matrix.target_repo_full_name }}
