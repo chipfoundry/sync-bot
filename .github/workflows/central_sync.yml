@@ -74,22 +74,23 @@ jobs:
           cd $TARGET_DIR
           
           # 1. --- Copy Root Makefile ---
-          # 'cp' will create the file if it doesn't exist, or overwrite if it does.
-          cp ../$UPSTREAM_DIR/Makefile .
+          # Use -f to force overwrite, replacing existing file or symlink
+          cp -f ../$UPSTREAM_DIR/Makefile .
           
           # 2. --- Copy openlane/Makefile ---
           mkdir -p openlane 2>/dev/null || true
-          cp ../$UPSTREAM_DIR/openlane/Makefile openlane/
+          # Use -f to force overwrite
+          cp -f ../$UPSTREAM_DIR/openlane/Makefile openlane/
           
           # 3. --- Copy .github/workflows/user_project_ci.yml ---
-          # Create destination directory structure if missing
           mkdir -p .github/workflows 2>/dev/null || true
-          cp ../$UPSTREAM_DIR/.github/workflows/user_project_ci.yml .github/workflows/
+          # Use -f to force overwrite
+          cp -f ../$UPSTREAM_DIR/.github/workflows/user_project_ci.yml .github/workflows/
           
           # 4. --- Copy .github/scripts/get_designs.py ---
-          # Create destination directory structure if missing
           mkdir -p .github/scripts 2>/dev/null || true
-          cp ../$UPSTREAM_DIR/.github/scripts/get_designs.py .github/scripts/
+          # Use -f to force overwrite
+          cp -f ../$UPSTREAM_DIR/.github/scripts/get_designs.py .github/scripts/
           
           # 5. Add ALL the specific files to staging
           git add Makefile \
