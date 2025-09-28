@@ -22,7 +22,6 @@ jobs:
         # REPLACE the list below with the full names of your target repos (e.g., chipfoundry/user-project-1)
         target_repo_full_name: 
           - chipfoundry/openframe_user_project
-          - chipfoundry/caravel_user_project_analog
           - chipfoundry/caravel_user_sram
     
     steps:
