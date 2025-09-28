@@ -58,43 +58,34 @@ jobs:
           path: upstream-repo
           
       # --- Copy & Check ---
-      
       - name: Copy Specific Files and Check for Changes
         id: copy_files
         run: |
           TARGET_DIR="target-repo"
           UPSTREAM_DIR="upstream-repo"
           
-          # Set up dynamic variables first
+          # 1. Set variables and change directory (no more git checkout here!)
           UPSTREAM_SHA=${{ github.event.client_payload.sha || github.event.inputs.upstream_sha }}
-          BRANCH_NAME="sync/makefiles-update-${UPSTREAM_SHA}-${GITHUB_RUN_ID}"
-          
-          # --- IMPORTANT FIX: Change to the downstream repo directory ---
           cd $TARGET_DIR
           
-          # Create a sync branch (now runs inside target-repo)
-          git checkout -b $BRANCH_NAME
-          
-          # --- Copy Files (Now paths are correct relative to $TARGET_DIR) ---
+          # --- Copy Files ---
           cp ../$UPSTREAM_DIR/Makefile .
           mkdir -p openlane 2>/dev/null || true
           cp ../$UPSTREAM_DIR/openlane/Makefile openlane/
           
-          # Add the specific files to staging
+          # 2. Add the specific files to staging (DO NOT COMMIT HERE!)
           git add Makefile openlane/Makefile
           
-          # Check for a diff (i.e., if the files actually changed)
+          # 3. Check for a diff on staged files
+          # Note: We must check for changes *only* on the files that were added.
           if git diff --cached --exit-code; then
-            # No changes found
             echo "sync_required=false" >> $GITHUB_OUTPUT
             echo "Skipping PR creation: No Makefile changes detected."
           else
-            # Changes found, proceeding with PR
             echo "sync_required=true" >> $GITHUB_OUTPUT
           fi
           
           # Output variables for the next step (Create Pull Request)
-          echo "BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_OUTPUT
           echo "UPSTREAM_SHA=$UPSTREAM_SHA" >> $GITHUB_OUTPUT
       
       # --- Pull Request Creation ---
@@ -104,12 +95,17 @@ jobs:
         with:
           token: ${{ steps.app_token.outputs.token }}
           path: target-repo 
+          
+          # CRITICAL FIX: Base branch name and suffix for uniqueness
+          branch: sync/makefiles-update
+          branch-suffix: timestamp # Forces creation of a unique branch (e.g., sync/makefiles-update-18072193992)
+          
           commit-message: "Autosync: Update root and openlane Makefiles (${{ steps.copy_files.outputs.UPSTREAM_SHA }})"
           title: "🤖 [Automated Sync] Update Core Makefiles"
           body: |
             This is an automated Pull Request to sync the latest **Makefile** and **openlane/Makefile** from the `caravel_user_project` template. This is a file-specific update to standardize configuration.
             
             * Upstream Commit: `${{ steps.copy_files.outputs.UPSTREAM_SHA }}`
-          branch: ${{ steps.copy_files.outputs.BRANCH_NAME }}
           base: main 
           labels: automation, config-sync
+          # The action will infer the repository from the 'path' input.
