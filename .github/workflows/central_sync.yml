@@ -111,26 +111,24 @@ jobs:
       
       # --- Pull Request Creation ---
       - name: Create Pull Request
+        id: cpr
         if: steps.copy_files.outputs.sync_required == 'true'
         uses: peter-evans/create-pull-request@v6
         with:
           token: ${{ steps.app_token.outputs.token }}
           path: target-repo 
-          
-          # CRITICAL FIX: Base branch name and suffix for uniqueness
-          branch: sync/makefiles-update
-          branch-suffix: timestamp # Forces creation of a unique branch (e.g., sync/makefiles-update-18072193992)
           reviewers: marwaneltoukhy, jdicorpo
+          branch: bot/config-sync 
           
-          commit-message: "Autosync: Update root and openlane Makefiles (${{ steps.copy_files.outputs.UPSTREAM_SHA }})"
-          title: "🤖 [Automated Sync] Update Core Makefiles"
+          commit-message: "Autosync: Update core config files (${{ steps.copy_files.outputs.UPSTREAM_SHA }})"
+          title: "🤖 [Automated Sync] Update Core Configuration Files"
           body: |
-            This is an automated Pull Request to sync the latest **Makefile** and **openlane/Makefile** from the `caravel_user_project` template. This is a file-specific update to standardize configuration.
+            This is an automated Pull Request to sync the latest **Makefiles, CI workflow, and build script** from the `caravel_user_project` template. This PR will be continuously updated by the bot until it is merged.
             
+            * Files updated: `Makefile`, `openlane/Makefile`, `.github/workflows/user_project_ci.yml`, `.github/scripts/get_designs.py`
             * Upstream Commit: `${{ steps.copy_files.outputs.UPSTREAM_SHA }}`
           base: main 
           labels: automation, config-sync
-          # The action will infer the repository from the 'path' input.
     
       - name: Notify Team via GitHub Assignment (Sends Email Notification)
         if: success() && steps.copy_files.outputs.sync_required == 'true'
