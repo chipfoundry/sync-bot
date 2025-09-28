@@ -96,8 +96,8 @@ jobs:
           # Output variables for the next step (Create Pull Request)
           echo "BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_OUTPUT
           echo "UPSTREAM_SHA=$UPSTREAM_SHA" >> $GITHUB_OUTPUT
+      
       # --- Pull Request Creation ---
-
       - name: Create Pull Request
         if: steps.copy_files.outputs.sync_required == 'true'
         uses: peter-evans/create-pull-request@v6
@@ -113,5 +113,3 @@ jobs:
           branch: ${{ steps.copy_files.outputs.BRANCH_NAME }}
           base: main 
           labels: automation, config-sync
-          # Target the repository where the PR should be created
-          repository: ${{ matrix.target_repo_full_name }}
