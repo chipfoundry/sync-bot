@@ -66,18 +66,20 @@ jobs:
           TARGET_DIR="target-repo"
           UPSTREAM_DIR="upstream-repo"
           
-          # Change directory to the downstream repo clone to run git commands
-          cd $TARGET_DIR
-          
-          # Define branch name and SHA for tracking
+          # Set up dynamic variables first
           UPSTREAM_SHA=${{ github.event.client_payload.sha || github.event.inputs.upstream_sha }}
           BRANCH_NAME="sync/makefiles-update-${UPSTREAM_SHA}-${GITHUB_RUN_ID}"
+          
+          # --- IMPORTANT FIX: Change to the downstream repo directory ---
+          cd $TARGET_DIR
+          
+          # Create a sync branch (now runs inside target-repo)
           git checkout -b $BRANCH_NAME
           
-          # --- Copy Files ---
-          cp $UPSTREAM_DIR/Makefile .
-          mkdir -p openlane 2>/dev/null || true # Ensure the directory exists
-          cp $UPSTREAM_DIR/openlane/Makefile openlane/
+          # --- Copy Files (Now paths are correct relative to $TARGET_DIR) ---
+          cp ../$UPSTREAM_DIR/Makefile .
+          mkdir -p openlane 2>/dev/null || true
+          cp ../$UPSTREAM_DIR/openlane/Makefile openlane/
           
           # Add the specific files to staging
           git add Makefile openlane/Makefile
@@ -92,9 +94,9 @@ jobs:
             echo "sync_required=true" >> $GITHUB_OUTPUT
           fi
           
+          # Output variables for the next step (Create Pull Request)
           echo "BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_OUTPUT
           echo "UPSTREAM_SHA=$UPSTREAM_SHA" >> $GITHUB_OUTPUT
-
       # --- Pull Request Creation ---
 
       - name: Create Pull Request
