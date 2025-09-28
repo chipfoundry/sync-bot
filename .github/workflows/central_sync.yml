@@ -23,6 +23,11 @@ jobs:
         target_repo_full_name: 
           - chipfoundry/openframe_user_project
           - chipfoundry/caravel_user_sram
+          - chipfoundry/caravel_user_project_analog
+          - chipfoundry/caravel_user_Neuromorphic_X1_32x32
+          - chipfoundry/serial_controller_example
+          - chipfoundry/caravel_user_sram_32kb
+          - chipfoundry/caravel_user_sram_16kb
     
     steps:
       # --- Setup & Authentication ---
@@ -64,23 +69,38 @@ jobs:
           TARGET_DIR="target-repo"
           UPSTREAM_DIR="upstream-repo"
           
-          # 1. Set variables and change directory (no more git checkout here!)
+          # Set variables and change directory
           UPSTREAM_SHA=${{ github.event.client_payload.sha || github.event.inputs.upstream_sha }}
           cd $TARGET_DIR
           
-          # --- Copy Files ---
+          # 1. --- Copy Root Makefile ---
+          # 'cp' will create the file if it doesn't exist, or overwrite if it does.
           cp ../$UPSTREAM_DIR/Makefile .
+          
+          # 2. --- Copy openlane/Makefile ---
           mkdir -p openlane 2>/dev/null || true
           cp ../$UPSTREAM_DIR/openlane/Makefile openlane/
           
-          # 2. Add the specific files to staging (DO NOT COMMIT HERE!)
-          git add Makefile openlane/Makefile
+          # 3. --- Copy .github/workflows/user_project_ci.yml ---
+          # Create destination directory structure if missing
+          mkdir -p .github/workflows 2>/dev/null || true
+          cp ../$UPSTREAM_DIR/.github/workflows/user_project_ci.yml .github/workflows/
           
-          # 3. Check for a diff on staged files
-          # Note: We must check for changes *only* on the files that were added.
+          # 4. --- Copy .github/scripts/get_designs.py ---
+          # Create destination directory structure if missing
+          mkdir -p .github/scripts 2>/dev/null || true
+          cp ../$UPSTREAM_DIR/.github/scripts/get_designs.py .github/scripts/
+          
+          # 5. Add ALL the specific files to staging
+          git add Makefile \
+                    openlane/Makefile \
+                    .github/workflows/user_project_ci.yml \
+                    .github/scripts/get_designs.py
+          
+          # 6. Check for a diff on staged files
           if git diff --cached --exit-code; then
             echo "sync_required=false" >> $GITHUB_OUTPUT
-            echo "Skipping PR creation: No Makefile changes detected."
+            echo "Skipping PR creation: No configuration changes detected."
           else
             echo "sync_required=true" >> $GITHUB_OUTPUT
           fi
@@ -99,6 +119,7 @@ jobs:
           # CRITICAL FIX: Base branch name and suffix for uniqueness
           branch: sync/makefiles-update
           branch-suffix: timestamp # Forces creation of a unique branch (e.g., sync/makefiles-update-18072193992)
+          reviewers: marwaneltoukhy, jdicorpo
           
           commit-message: "Autosync: Update root and openlane Makefiles (${{ steps.copy_files.outputs.UPSTREAM_SHA }})"
           title: "🤖 [Automated Sync] Update Core Makefiles"
@@ -109,3 +130,16 @@ jobs:
           base: main 
           labels: automation, config-sync
           # The action will infer the repository from the 'path' input.
+    
+      - name: Notify Team via GitHub Assignment (Sends Email Notification)
+        if: success() && steps.copy_files.outputs.sync_required == 'true'
+        run: |
+          echo "PR created: ${{ steps.cpr.outputs.pull-request-url }}"
+          
+          # The notification is handled by the 'reviewers' input in the previous step.
+          # We just need to log success here. 
+          # If you didn't use the 'reviewers' input, you could use the gh CLI:
+          # gh pr edit ${{ steps.cpr.outputs.pull-request-url }} --add-reviewer your-team/team-name
+        env:
+          GITHUB_TOKEN: ${{ steps.app_token.outputs.token }}
+          
